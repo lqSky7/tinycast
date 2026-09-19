@@ -243,6 +243,13 @@ final class AppSettings {
         didSet { defaults.set(paletteDraggable, forKey: Key.paletteDraggable.rawValue) }
     }
 
+    /// Scales the palette up out of a blur as it opens; off, it is simply there.
+    var paletteSummonAnimation: Bool {
+        didSet {
+            defaults.set(paletteSummonAnimation, forKey: Key.paletteSummonAnimation.rawValue)
+        }
+    }
+
     /// Where a drag left the panel's top-left, per display and relative to it.
     var palettePositions: [String: [Double]] {
         didSet { defaults.set(palettePositions, forKey: Key.palettePosition.rawValue) }
@@ -588,6 +595,9 @@ final class AppSettings {
             || defaults.bool(forKey: Key.openOnCursorScreen.rawValue)
         autoSwitchInputSourceID = defaults.string(forKey: Key.autoSwitchInputSource.rawValue)
         paletteDraggable = defaults.bool(forKey: Key.paletteDraggable.rawValue)
+        paletteSummonAnimation =
+            defaults.object(forKey: Key.paletteSummonAnimation.rawValue) == nil
+            || defaults.bool(forKey: Key.paletteSummonAnimation.rawValue)
         palettePositions =
             defaults.dictionary(forKey: Key.palettePosition.rawValue)
             as? [String: [Double]] ?? [:]

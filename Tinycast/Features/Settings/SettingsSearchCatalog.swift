@@ -155,6 +155,9 @@ enum SettingsSearchCatalog {
             .generalAppearance, "Drag to reposition",
             keywords: ["move", "position", "window"]),
         .init(
+            .generalAppearance, "Summon animation",
+            keywords: ["motion", "scale", "blur", "fade", "appear", "reduce motion"]),
+        .init(
             .generalHyperKey, "Hyper Key",
             keywords: ["modifier", "remap", "caps lock", "capslock"]),
         .init(

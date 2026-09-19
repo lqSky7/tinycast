@@ -26,6 +26,7 @@ struct RootPaletteView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(\.metrics) private var metrics
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
     /// Kept apart from the search field's own focus. See docs/features/palette.md.
     @FocusState private var argumentFocused: String?
@@ -42,9 +43,17 @@ struct RootPaletteView: View {
     @State private var hostWindow: NSWindow?
     /// The pending scroll request; modes are exclusive, so one piece of state serves all.
     @State private var scroll = ScrollIntent(kind: .top)
+    /// The summon beat, split across the body: it scales the panel and settles the content inside it.
+    @State private var summonSettled = false
 
     /// Compact vs. full; the source of truth is on `AppCore`, so the two can't disagree.
     private var isCollapsed: Bool { core.paletteCoordinator.paletteIsCollapsed }
+
+    /// Reduce Motion keeps the window's cross-fade and drops the scale and the blur, as it should.
+    private var summonAnimates: Bool { settings.paletteSummonAnimation && !reduceMotion }
+
+    /// True while the palette is still arriving or leaving, which is the whole of the beat.
+    private var summonHidden: Bool { summonAnimates && !summonSettled }
 
     /// The current mode's screen: its rows are the visible order the flat selection indexes.
     private var screen: any PaletteScreen {
@@ -307,6 +316,8 @@ struct RootPaletteView: View {
                 )
                 // The window's frame is the size source, so the glass and clip stay matched.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                // Inside the glass, so the beat never touches the scrim, the hairline edge or the shadow.
+                .blur(radius: summonHidden ? Theme.PaletteMotion.hiddenBlur : 0)
                 .background(PaletteBackground(window: hostWindow))
                 .overlay {
                     Theme.Colors.dialogDimming
@@ -445,6 +456,18 @@ struct RootPaletteView: View {
             }
             .onAppear { searchFocused = !screen.hidesSearchField }
             .modifier(SearchFieldHiding(hidden: hidesSearchField, apply: applySearchFieldHiding))
+            // The outer half of the summon beat: the whole panel, edge and shadow included, scales.
+            .scaleEffect(summonHidden ? Theme.PaletteMotion.hiddenScale : 1, anchor: .top)
+            // One explicit transaction drives both halves, the way `PanelEntrance` drives its own.
+            .onChange(of: vm.isVisible, initial: true) { _, visible in
+                guard summonAnimates else {
+                    summonSettled = visible
+                    return
+                }
+                withAnimation(visible ? Theme.PaletteMotion.enter : Theme.PaletteMotion.exit) {
+                    summonSettled = visible
+                }
+            }
             // Several paths flip `paletteIsCollapsed`, so resize the window to match.
             .onChange(of: core.paletteCoordinator.paletteIsCollapsed) {
                 core.paletteCoordinator.syncPaletteSize()

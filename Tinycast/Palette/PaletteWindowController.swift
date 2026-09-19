@@ -12,6 +12,8 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     private var popToRootTimer: Timer?
     // Reopen beat the timeout, so select the preserved query.
     private var queryWasPreserved = false
+    /// Held for the length of a fade-out, so a second hide cannot tear the palette down twice.
+    private var isHiding = false
     /// Resolved once per show; the top edge is the one that must not drift.
     private var anchor: CGPoint?
     /// Live only between mouse-down and mouse-up on a drag handle; nil means a move was ours.
@@ -41,7 +43,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         self.core = core
     }
 
-    var isVisible: Bool { panel?.isVisible ?? false }
+    var isVisible: Bool { panel?.isVisible == true && !isHiding }
 
     /// What the palette covered when it was summoned, for anything it expands into on dismissal.
     var previousTarget: InjectionTarget? {
@@ -61,6 +63,8 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
             // Once per summon, and from `previousApp`, so the label names the paste target.
             core.palette.pasteTarget = PasteTarget(app: previousApp)
             let panel = ensurePanel()
+            // A summon during a fade-out takes the palette back, so the teardown must not resume.
+            isHiding = false
             // Open disarmed: a pointer already over a row must not highlight it.
             core.palette.disarmHoverHighlight(pointerAt: NSEvent.mouseLocation)
             // Re-resolve the anchor now, then hold it so resizes never move the window.
@@ -73,13 +77,26 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
                 preferredInputSourceID: core.settings.autoSwitchInputSourceID)
             // Events go stale while the palette is closed, and the countdown only ticks while up.
             core.calendarCoordinator.paletteDidShow()
+            // Only a real summon animates: a mode switch re-shows a panel that is already up.
+            let summoning = !panel.isVisible && core.settings.paletteSummonAnimation
+            // Ordered while still invisible, so the content's beat and the window's fade share a frame.
+            if summoning {
+                panel.alphaValue = 0
+                panel.makeKeyAndOrderFront(nil)
+                panel.orderFrontRegardless()
+            }
             core.palette.noteVisible(true)
             core.clipboardStore.setTextSearchActive(true)
             // Only while we are on screen: a system-wide tap has no business outliving the window.
             commandEscapeTap.enable()
-            // Non-activating, so summoning never raises our own aux windows behind it.
-            panel.makeKeyAndOrderFront(nil)
-            panel.orderFrontRegardless()
+            if summoning {
+                panel.fadeIn(duration: Theme.Duration.paletteEnter)
+            } else {
+                panel.cancelFade()
+                // Non-activating, so summoning never raises our own aux windows behind it.
+                panel.makeKeyAndOrderFront(nil)
+                panel.orderFrontRegardless()
+            }
             // A never-activated login item can drop the first key request, so re-assert.
             DispatchQueue.main.async { [weak panel] in
                 guard let panel, panel.isVisible, !panel.isKeyWindow else { return }
@@ -137,11 +154,27 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     }
 
     func hide(restoreFocus: Bool) {
-        panel?.orderOut(nil)
+        // One teardown per hide, however many paths ask for it: a second would restore focus twice.
+        guard !isHiding else { return }
+        isHiding = true
         commandEscapeTap.disable()
+        // Starts the content's own beat, whether or not the window is given time to fade.
+        core.palette.noteVisible(false)
+        // Nothing is queued behind a focus-restoring hide, so the panel may fade before it goes.
+        guard restoreFocus, core.settings.paletteSummonAnimation, let panel, panel.isVisible else {
+            panel?.orderOut(nil)
+            finishHide(restoreFocus: restoreFocus)
+            return
+        }
+        panel.fadeOut(duration: Theme.Duration.paletteExit) { [weak self] in
+            self?.finishHide(restoreFocus: true)
+        }
+    }
+
+    /// Everything that must run once per hide, however the panel left the screen.
+    private func finishHide(restoreFocus: Bool) {
         core.inputSourceSwitcher.endSession()
         core.calendarCoordinator.paletteDidHide()
-        core.palette.noteVisible(false)
         core.clipboardStore.setTextSearchActive(false)
         // Drop the anchor, so the next summon re-resolves for the screen in use then.
         anchor = nil
@@ -153,6 +186,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         FilePreviewThumbnail.purgePreviews()
         IconCache.purgeFitted()
         schedulePopToRoot()
+        isHiding = false
         guard restoreFocus else { return }
         // Our own window first: it is still open, and activating another app would bury it.
         if let own = previousOwnWindow, own.isVisible {

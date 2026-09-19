@@ -96,6 +96,10 @@ struct GeneralSettingsView: View {
                     SettingsRowTitle(.generalAppearance, "Drag to reposition")
                     Text("Drag the strip above the search field.")
                 }
+                Toggle(isOn: $settings.paletteSummonAnimation) {
+                    SettingsRowTitle(.generalAppearance, "Summon animation")
+                    Text("Scale up out of a blur as it opens, and back down as it closes.")
+                }
             } header: {
                 SettingsSectionHeader(.generalAppearance)
             }

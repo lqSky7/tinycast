@@ -273,6 +273,9 @@ enum Theme {
         static let menuChevron: TimeInterval = 0.34
         static let copyFeedback: TimeInterval = 1.2
         static let chatFooter: TimeInterval = 0.12
+        /// The palette arriving and leaving; one beat, so the window's fade and the content land together.
+        static let paletteEnter: TimeInterval = 0.14
+        static let paletteExit: TimeInterval = 0.10
         /// A Settings search result scrolling its section into view, then the pulse that marks it.
         static let settingsReveal: TimeInterval = 0.28
         static let settingsFlash: TimeInterval = 2.0
@@ -299,6 +302,19 @@ enum Theme {
         /// Starts promptly and eases gently into the chevron's final direction.
         static let chevronAnimation = Animation.timingCurve(
             0.16, 1, 0.3, 1, duration: Theme.Duration.menuChevron)
+    }
+
+    /// The palette arriving and leaving; the panel has no chrome, so its content moves.
+    enum PaletteMotion {
+        /// The panel is scaled whole; the blur is not, and stays inside the glass where the edge is.
+        static let hiddenScale: CGFloat = 0.94
+        static let hiddenBlur: CGFloat = 6
+        /// Barely front-loaded, so the settle is still moving while the window's own fade is running.
+        static let enter = Animation.timingCurve(
+            0.2, 0.1, 0.3, 1, duration: Theme.Duration.paletteEnter)
+        /// Shorter, and it outruns the fade: a dismissal's shrink must be seen before the panel goes.
+        static let exit = Animation.timingCurve(
+            0.4, 0, 1, 1, duration: Theme.Duration.paletteExit)
     }
 
     /// System text styles (not hardcoded sizes) so the UI honors Dynamic Type.

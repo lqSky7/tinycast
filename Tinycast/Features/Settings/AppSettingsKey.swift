@@ -25,6 +25,7 @@ enum AppSettingsKey: String, CaseIterable {
     case openOnCursorScreen = "openOnCursorScreen"
     case autoSwitchInputSource = "autoSwitchInputSource"
     case paletteDraggable = "paletteDraggable"
+    case paletteSummonAnimation = "paletteSummonAnimation"
     case palettePosition = "palettePosition"
     case fileSearchEnabled = "fileSearchEnabled"
     case fileSearchScopes = "fileSearchScopes"

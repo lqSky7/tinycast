@@ -5,9 +5,9 @@ import SwiftUI
 
 extension NSWindow {
     /// Fades the whole window, shadow included; `order` runs while still invisible.
-    func fadeIn(duration: TimeInterval, order: () -> Void) {
+    func fadeIn(duration: TimeInterval, order: (() -> Void)? = nil) {
         alphaValue = 0
-        order()
+        order?()
         NSAnimationContext.runAnimationGroup { context in
             context.duration = duration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
