@@ -43,8 +43,8 @@ struct RootPaletteView: View {
     @State private var hostWindow: NSWindow?
     /// The pending scroll request; modes are exclusive, so one piece of state serves all.
     @State private var scroll = ScrollIntent(kind: .top)
-    /// The summon beat, split across the body: it scales the panel and settles the content inside it.
-    @State private var summonSettled = false
+    /// The summon beat, split across the body: it scales the panel and blurs the content inside it.
+    @State private var summonPhase = SummonPhase.arriving
 
     /// Compact vs. full; the source of truth is on `AppCore`, so the two can't disagree.
     private var isCollapsed: Bool { core.paletteCoordinator.paletteIsCollapsed }
@@ -52,8 +52,20 @@ struct RootPaletteView: View {
     /// Reduce Motion keeps the window's cross-fade and drops the scale and the blur, as it should.
     private var summonAnimates: Bool { settings.paletteSummonAnimation && !reduceMotion }
 
-    /// True while the palette is still arriving or leaving, which is the whole of the beat.
-    private var summonHidden: Bool { summonAnimates && !summonSettled }
+    /// Only a dismissal loses focus; an arrival is sharp from its first frame.
+    private var summonBlur: CGFloat {
+        summonAnimates && summonPhase == .leaving ? Theme.PaletteMotion.exitBlur : 0
+    }
+
+    /// The panel's own size, which the spring lands and a dismissal grows away from.
+    private var summonScale: CGFloat {
+        guard summonAnimates else { return 1 }
+        switch summonPhase {
+        case .arriving: return Theme.PaletteMotion.hiddenScale
+        case .settled: return 1
+        case .leaving: return Theme.PaletteMotion.exitScale
+        }
+    }
 
     /// The current mode's screen: its rows are the visible order the flat selection indexes.
     private var screen: any PaletteScreen {
@@ -317,7 +329,7 @@ struct RootPaletteView: View {
                 // The window's frame is the size source, so the glass and clip stay matched.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 // Inside the glass, so the beat never touches the scrim, the hairline edge or the shadow.
-                .blur(radius: summonHidden ? Theme.PaletteMotion.hiddenBlur : 0)
+                .blur(radius: summonBlur)
                 .background(PaletteBackground(window: hostWindow))
                 .overlay {
                     Theme.Colors.dialogDimming
@@ -457,15 +469,26 @@ struct RootPaletteView: View {
             .onAppear { searchFocused = !screen.hidesSearchField }
             .modifier(SearchFieldHiding(hidden: hidesSearchField, apply: applySearchFieldHiding))
             // The outer half of the summon beat: the whole panel, edge and shadow included, scales.
-            .scaleEffect(summonHidden ? Theme.PaletteMotion.hiddenScale : 1, anchor: .top)
+            .scaleEffect(summonScale, anchor: .top)
             // One explicit transaction drives both halves, the way `PanelEntrance` drives its own.
-            .onChange(of: vm.isVisible, initial: true) { _, visible in
+            .onChange(of: vm.isVisible) { _, visible in
                 guard summonAnimates else {
-                    summonSettled = visible
+                    summonPhase = visible ? .settled : .arriving
                     return
                 }
-                withAnimation(visible ? Theme.PaletteMotion.enter : Theme.PaletteMotion.exit) {
-                    summonSettled = visible
+                guard !visible else {
+                    withAnimation(Theme.PaletteMotion.enter) { summonPhase = .settled }
+                    return
+                }
+                withAnimation(Theme.PaletteMotion.exit, completionCriteria: .logicallyComplete) {
+                    summonPhase = .leaving
+                } completion: {
+                    // Off screen by now, so the reset is never seen. Without it the next arrival
+                    // would unwind the dismissal, growing back down to size instead of springing up.
+                    guard !vm.isVisible else { return }
+                    var jump = Transaction()
+                    jump.disablesAnimations = true
+                    withTransaction(jump) { summonPhase = .arriving }
                 }
             }
             // Several paths flip `paletteIsCollapsed`, so resize the window to match.
@@ -1400,6 +1423,15 @@ private struct SearchFieldHiding: ViewModifier {
     func body(content: Content) -> some View {
         content.onChange(of: hidden) { _, hidden in apply(hidden) }
     }
+}
+
+/// The three states the panel is ever drawn in, which is the whole of its beat.
+private enum SummonPhase {
+    /// A hair under its size and already sharp; the spring is what lands it.
+    case arriving
+    case settled
+    /// Grown away and out of focus, the way a dismissal leaves rather than shrinks.
+    case leaving
 }
 
 /// The footer's menu circle; hover lives here, so a sweep never re-renders the body.

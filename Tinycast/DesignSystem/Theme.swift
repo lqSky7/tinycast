@@ -274,7 +274,7 @@ enum Theme {
         static let copyFeedback: TimeInterval = 1.2
         static let chatFooter: TimeInterval = 0.12
         /// The palette arriving and leaving; one beat, so the window's fade and the content land together.
-        static let paletteEnter: TimeInterval = 0.14
+        static let paletteEnter: TimeInterval = 0.12
         static let paletteExit: TimeInterval = 0.10
         /// A Settings search result scrolling its section into view, then the pulse that marks it.
         static let settingsReveal: TimeInterval = 0.28
@@ -306,13 +306,13 @@ enum Theme {
 
     /// The palette arriving and leaving; the panel has no chrome, so its content moves.
     enum PaletteMotion {
-        /// The panel is scaled whole; the blur is not, and stays inside the glass where the edge is.
-        static let hiddenScale: CGFloat = 0.94
-        static let hiddenBlur: CGFloat = 6
-        /// Barely front-loaded, so the settle is still moving while the window's own fade is running.
-        static let enter = Animation.timingCurve(
-            0.2, 0.1, 0.3, 1, duration: Theme.Duration.paletteEnter)
-        /// Shorter, and it outruns the fade: a dismissal's shrink must be seen before the panel goes.
+        /// Arrives a hair under its size and springs into it, sharp the whole way.
+        static let hiddenScale: CGFloat = 0.96
+        /// A dismissal grows away from the user and loses focus, rather than shrinking at them.
+        static let exitScale: CGFloat = 1.04
+        static let exitBlur: CGFloat = 8
+        /// Barely any bounce, so the surface lands in its size instead of springing past it.
+        static let enter = Animation.spring(duration: Theme.Duration.paletteEnter, bounce: 0.1)
         static let exit = Animation.timingCurve(
             0.4, 0, 1, 1, duration: Theme.Duration.paletteExit)
     }
